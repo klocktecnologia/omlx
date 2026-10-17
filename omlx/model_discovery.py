@@ -89,6 +89,8 @@ VLM_NATIVE_TEXT_MODEL_TYPES = {
     "deepseek_v41",
     "glm5_next",
     "minimax_m3",
+    # mlx-lm has no per-layer Puzzle expert layout; mlx-vlm remaps it to nemotron_h.
+    "nemotron_h_puzzle",
 }
 
 # Multimodal checkpoints whose currently vendored mlx-lm implementation only

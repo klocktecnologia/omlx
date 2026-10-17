@@ -2455,3 +2455,68 @@ def test_deepseek_v4_flat_vision_config(tmp_path, vision_layers, expected):
         config["vision_n_layers"] = vision_layers
     (tmp_path / "config.json").write_text(json.dumps(config))
     assert detect_model_type(tmp_path) == expected
+
+
+class TestNemotronRouting:
+    """Nemotron 3.5 checkpoints route by what mlx-vlm can build."""
+
+    @staticmethod
+    def _model_dir(tmp_path, config):
+        (tmp_path / "config.json").write_text(json.dumps(config))
+        return tmp_path
+
+    def test_puzzle_text_checkpoint_goes_to_vlm_engine(self, tmp_path):
+        config = {
+            "model_type": "nemotron_h_puzzle",
+            "architectures": ["NemotronHForCausalLM"],
+        }
+        assert detect_model_type(self._model_dir(tmp_path, config)) == "vlm"
+
+    def test_plain_nemotron_h_text_checkpoint_stays_llm(self, tmp_path):
+        config = {
+            "model_type": "nemotron_h",
+            "architectures": ["NemotronHForCausalLM"],
+        }
+        assert detect_model_type(self._model_dir(tmp_path, config)) == "llm"
+
+    def test_nemotron_h_with_block_configs_and_vision_goes_to_vlm(self, tmp_path):
+        config = {
+            "model_type": "nemotron_h",
+            "architectures": ["NemotronHForCausalLM"],
+            "block_configs": [{"block_type": "mamba"}],
+            "vision_config": {"hidden_size": 1280},
+        }
+        assert detect_model_type(self._model_dir(tmp_path, config)) == "vlm"
+
+    def test_nemotron_h_omni_goes_to_vlm(self, tmp_path):
+        config = {
+            "model_type": "nemotron_h_omni",
+            "llm_config": {"model_type": "nemotron_h"},
+            "vision_config": {"hidden_size": 1280},
+        }
+        assert detect_model_type(self._model_dir(tmp_path, config)) == "vlm"
+
+    def test_user_override_wins_over_puzzle_routing(self, tmp_path):
+        from omlx.engine_pool import EnginePool
+        from omlx.model_settings import ModelSettings, ModelSettingsManager
+
+        model = tmp_path / "puzzle"
+        model.mkdir()
+        self._model_dir(
+            model,
+            {
+                "model_type": "nemotron_h_puzzle",
+                "architectures": ["NemotronHForCausalLM"],
+            },
+        )
+        (model / "model.safetensors").write_bytes(b"0" * 1024)
+        pool = EnginePool()
+        pool.discover_models(str(tmp_path))
+        assert pool.get_entry("puzzle").model_type == "vlm"
+
+        settings = ModelSettingsManager(tmp_path / "settings")
+        settings.set_settings("puzzle", ModelSettings(model_type_override="llm"))
+        pool.apply_settings_overrides(settings)
+
+        entry = pool.get_entry("puzzle")
+        assert (entry.model_type, entry.engine_type) == ("llm", "batched")

@@ -862,6 +862,49 @@ class TestInjectToolCalling:
         assert tokenizer.has_tool_calling is True
         assert isinstance(tokenizer.tool_call_start, str)
 
+    @pytest.mark.parametrize(
+        "template_file",
+        [
+            "nemotron_bolt_chat_template.jinja",
+            "nemotron_super_vl_chat_template.jinja",
+        ],
+    )
+    def test_nemotron_template_tool_reply_becomes_openai_tool_call(self, template_file):
+        """Nemotron 3.5 templates install a parser that reads the XML reply."""
+        from omlx.api.tool_calling import parse_tool_calls
+
+        template = (Path(__file__).parent / "fixtures" / template_file).read_text()
+        engine = _make_engine()
+        tokenizer = MockVLMTokenizer(
+            chat_template=template,
+            vocab={"<tool_call>": 100, "</tool_call>": 101},
+        )
+
+        engine._inject_tool_calling(tokenizer)
+
+        assert tokenizer.has_tool_calling is True
+        assert tokenizer.tool_parser.__module__ == "mlx_vlm.tools.parsers.qwen3_coder"
+        reply = (
+            "<tool_call>\n<function=read_file>\n<parameter=path>\nREADME.md\n"
+            "</parameter>\n</function>\n</tool_call>"
+        )
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string"}},
+                    },
+                },
+            }
+        ]
+        _, calls = parse_tool_calls(reply, tokenizer, tools)
+        assert calls is not None and len(calls) == 1
+        assert calls[0].function.name == "read_file"
+        assert json.loads(calls[0].function.arguments) == {"path": "README.md"}
+
 
 # ---------------------------------------------------------------------------
 # TestApplyChatTemplate
