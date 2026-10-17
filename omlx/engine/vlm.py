@@ -119,6 +119,12 @@ OCR_EXTRA_STOP_SEQUENCES: List[str] = [
 VLM_LANGUAGE_PROMPT_KWARGS = ("mm_token_type_ids", "token_type_ids")
 
 COHERE2_MOE_MODEL_TYPE = "cohere2_moe"
+# Text-only checkpoints loaded with mlx-vlm's load_model and a tokenizer-only
+# processor fallback, instead of mlx-vlm's full load.
+TEXT_ONLY_TOKENIZER_FALLBACK_MODEL_TYPES = {
+    COHERE2_MOE_MODEL_TYPE,
+    "nemotron_h_puzzle",
+}
 QWEN4_EXP_MODEL_TYPE = "qwen4_exp"
 MINIMAX_M3_VL_MODEL_TYPE = "minimax_m3_vl"
 MINIMAX_M3_MODEL_TYPES = {"minimax_m3", MINIMAX_M3_VL_MODEL_TYPE}
@@ -243,12 +249,19 @@ def _attach_vlm_tokenizer_runtime(tokenizer: Any, model_path: Path, eos_token_id
     return tokenizer
 
 
-def _load_cohere2_moe_text_model(
+def _load_text_model_with_tokenizer_fallback(
     model_name: str,
     *,
     trust_remote_code: bool = False,
 ):
-    """Load Cohere2 MoE through mlx-vlm with a tokenizer-only fallback."""
+    """Load a text-only checkpoint through mlx-vlm with a tokenizer fallback.
+
+    The model comes from mlx-vlm's ``load_model``. The processor comes from
+    ``load_processor``; when that fails (for example a tokenizer_config.json
+    whose ``auto_map`` names a processor module the snapshot does not ship),
+    the tokenizer alone serves as the processor, with the detokenizer and
+    stopping criteria attached. A tokenizer load failure propagates.
+    """
     from mlx_vlm.utils import get_model_path, load_model, load_processor
     from transformers import AutoTokenizer
 
@@ -270,7 +283,7 @@ def _load_cohere2_moe_text_model(
         )
     except Exception as exc:
         logger.debug(
-            "mlx-vlm processor load failed for Cohere2 MoE %s; "
+            "mlx-vlm processor load failed for text-only model %s; "
             "falling back to AutoTokenizer: %s",
             model_name,
             exc,
@@ -2180,8 +2193,8 @@ class VLMBatchedEngine(BaseEngine):
                             )
                         ),
                     )
-                if model_type == COHERE2_MOE_MODEL_TYPE:
-                    return _load_cohere2_moe_text_model(
+                if model_type in TEXT_ONLY_TOKENIZER_FALLBACK_MODEL_TYPES:
+                    return _load_text_model_with_tokenizer_fallback(
                         self._model_name,
                         trust_remote_code=self._trust_remote_code,
                     )
