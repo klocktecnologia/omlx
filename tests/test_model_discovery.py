@@ -694,7 +694,9 @@ class TestDetectModelType:
         (tmp_path / "config.json").write_text(json.dumps(config))
         assert detect_model_type(tmp_path) == "llm"
 
-    def test_detect_gemma3_text_model_without_sentence_transformers_modules_is_llm(self, tmp_path):
+    def test_detect_gemma3_text_model_without_sentence_transformers_modules_is_llm(
+        self, tmp_path
+    ):
         """gemma3_text base transformer without sentence-transformers modules stays LLM."""
         config = {
             "model_type": "gemma3_text",
@@ -1092,9 +1094,7 @@ class TestDiscoverModels:
         assert "optiq-model" in models
         assert "incomplete model" not in caplog.text
 
-    def test_auxiliary_only_index_still_checks_numbered_files(
-        self, tmp_path, caplog
-    ):
+    def test_auxiliary_only_index_still_checks_numbered_files(self, tmp_path, caplog):
         """An index without numbered references still falls back to the
         filenames on disk, so an actual numbered shard gap remains hidden."""
         model_dir = tmp_path / "gapped-model"
@@ -1127,8 +1127,7 @@ class TestDiscoverModels:
         (model_dir / "config.json").write_text(json.dumps({"model_type": "llama"}))
         index = {
             "weight_map": {
-                f"layer.{i}": f"model-0000{i}-of-00004.safetensors"
-                for i in range(1, 5)
+                f"layer.{i}": f"model-0000{i}-of-00004.safetensors" for i in range(1, 5)
             }
         }
         (model_dir / "model.safetensors.index.json").write_text(json.dumps(index))
@@ -1162,9 +1161,7 @@ class TestDiscoverModels:
         assert models == {}
         assert "incomplete model 'no-weights'" in caplog.text
 
-    def test_discover_stale_index_partial_other_shards_skips(
-        self, tmp_path, caplog
-    ):
+    def test_discover_stale_index_partial_other_shards_skips(self, tmp_path, caplog):
         """Stale index AND the differently-numbered on-disk set has its own
         gap: skip, reporting against the shards actually present."""
         model_dir = tmp_path / "stale-partial"
@@ -1172,8 +1169,7 @@ class TestDiscoverModels:
         (model_dir / "config.json").write_text(json.dumps({"model_type": "llama"}))
         index = {
             "weight_map": {
-                f"layer.{i}": f"model-0000{i}-of-00004.safetensors"
-                for i in range(1, 5)
+                f"layer.{i}": f"model-0000{i}-of-00004.safetensors" for i in range(1, 5)
             }
         }
         (model_dir / "model.safetensors.index.json").write_text(json.dumps(index))
@@ -1360,10 +1356,12 @@ class TestDiscoverModels:
         reranker_dir = tmp_path / "bge-reranker"
         reranker_dir.mkdir()
         (reranker_dir / "config.json").write_text(
-            json.dumps({
-                "model_type": "modernbert",
-                "architectures": ["ModernBertForSequenceClassification"]
-            })
+            json.dumps(
+                {
+                    "model_type": "modernbert",
+                    "architectures": ["ModernBertForSequenceClassification"],
+                }
+            )
         )
         (reranker_dir / "model.safetensors").write_bytes(b"0" * 500)
 
@@ -1620,7 +1618,9 @@ class TestReadModelContextLength:
         if config is not None:
             (tmp_path / "config.json").write_text(json.dumps(config))
         if tokenizer_config is not None:
-            (tmp_path / "tokenizer_config.json").write_text(json.dumps(tokenizer_config))
+            (tmp_path / "tokenizer_config.json").write_text(
+                json.dumps(tokenizer_config)
+            )
 
     def test_max_position_embeddings_wins(self, tmp_path):
         self._write(tmp_path, config={"max_position_embeddings": 262144})
@@ -1634,25 +1634,36 @@ class TestReadModelContextLength:
             assert _read_model_context_length(sub) == 8192, key
 
     def test_top_level_takes_precedence_over_nested(self, tmp_path):
-        self._write(tmp_path, config={
-            "max_position_embeddings": 200000,
-            "text_config": {"max_position_embeddings": 32768},
-        })
+        self._write(
+            tmp_path,
+            config={
+                "max_position_embeddings": 200000,
+                "text_config": {"max_position_embeddings": 32768},
+            },
+        )
         assert _read_model_context_length(tmp_path) == 200000
 
     def test_text_config_fallback(self, tmp_path):
         """VLM wrappers stash the language head's ctx in text_config."""
-        self._write(tmp_path, config={"text_config": {"max_position_embeddings": 131072}})
+        self._write(
+            tmp_path, config={"text_config": {"max_position_embeddings": 131072}}
+        )
         assert _read_model_context_length(tmp_path) == 131072
 
     def test_language_config_fallback(self, tmp_path):
         """Some Qwen-style configs use language_config instead."""
-        self._write(tmp_path, config={"language_config": {"max_position_embeddings": 65536}})
+        self._write(
+            tmp_path, config={"language_config": {"max_position_embeddings": 65536}}
+        )
         assert _read_model_context_length(tmp_path) == 65536
 
     def test_tokenizer_max_length_fallback(self, tmp_path):
         """When config.json doesn't expose a length, tokenizer_config wins."""
-        self._write(tmp_path, config={"model_type": "llama"}, tokenizer_config={"model_max_length": 4096})
+        self._write(
+            tmp_path,
+            config={"model_type": "llama"},
+            tokenizer_config={"model_max_length": 4096},
+        )
         assert _read_model_context_length(tmp_path) == 4096
 
     def test_tokenizer_sentinel_rejected(self, tmp_path):
@@ -1906,9 +1917,7 @@ class TestUnsupportedModels:
         # Create a TTS model
         tts_dir = tmp_path / "Qwen3-TTS"
         tts_dir.mkdir()
-        (tts_dir / "config.json").write_text(
-            json.dumps({"model_type": "qwen3_tts"})
-        )
+        (tts_dir / "config.json").write_text(json.dumps({"model_type": "qwen3_tts"}))
         (tts_dir / "model.safetensors").write_bytes(b"0" * 1500)
 
         models = discover_models(tmp_path)
@@ -1941,7 +1950,9 @@ class TestHfCacheDiscovery:
         snapshot.mkdir(parents=True)
         return entry, snapshot
 
-    def _make_hf_cache_model(self, parent: Path, org: str, name: str, model_type: str = "llama"):
+    def _make_hf_cache_model(
+        self, parent: Path, org: str, name: str, model_type: str = "llama"
+    ):
         """Helper to create an HF cache entry with a valid model in the snapshot."""
         _, snapshot = self._make_hf_cache_entry(parent, org, name)
         (snapshot / "config.json").write_text(json.dumps({"model_type": model_type}))
@@ -1949,7 +1960,9 @@ class TestHfCacheDiscovery:
 
     def test_resolve_valid_entry(self, tmp_path):
         """Valid HF cache entry resolves to snapshot path and repo metadata."""
-        entry, snapshot = self._make_hf_cache_entry(tmp_path, "mlx-community", "Qwen3-8B-4bit")
+        entry, snapshot = self._make_hf_cache_entry(
+            tmp_path, "mlx-community", "Qwen3-8B-4bit"
+        )
 
         result = _resolve_hf_cache_entry(entry)
         assert result is not None
@@ -1992,7 +2005,9 @@ class TestHfCacheDiscovery:
 
     def test_resolve_strips_whitespace_from_refs(self, tmp_path):
         """Trailing newline in refs/main is stripped (matches real HF cache)."""
-        entry, snapshot = self._make_hf_cache_entry(tmp_path, "mlx-community", "Qwen3-8B")
+        entry, snapshot = self._make_hf_cache_entry(
+            tmp_path, "mlx-community", "Qwen3-8B"
+        )
         # Overwrite with trailing newline (like real HF cache)
         (entry / "refs" / "main").write_text(self.FAKE_COMMIT + "\n")
 
@@ -2030,7 +2045,10 @@ class TestHfCacheDiscovery:
 
         models = discover_models(tmp_path)
         assert models["mlx-community--Qwen3-8B-4bit"].model_path == str(
-            tmp_path / "models--mlx-community--Qwen3-8B-4bit" / "snapshots" / self.FAKE_COMMIT
+            tmp_path
+            / "models--mlx-community--Qwen3-8B-4bit"
+            / "snapshots"
+            / self.FAKE_COMMIT
         )
 
     def test_hf_cache_without_config_json_skipped(self, tmp_path):
@@ -2082,7 +2100,9 @@ class TestHfCacheDiscovery:
 
     def test_hf_cache_org_name_does_not_trigger_name_heuristics(self, tmp_path):
         """Only the repo part counts; an org name with 'embed' stays an LLM."""
-        _, snapshot = self._make_hf_cache_entry(tmp_path, "embed-lab", "Qwen3-8B-mlx-4bit")
+        _, snapshot = self._make_hf_cache_entry(
+            tmp_path, "embed-lab", "Qwen3-8B-mlx-4bit"
+        )
         (snapshot / "config.json").write_text(
             json.dumps({"model_type": "qwen3", "architectures": ["Qwen3ForCausalLM"]})
         )
@@ -2455,3 +2475,68 @@ def test_deepseek_v4_flat_vision_config(tmp_path, vision_layers, expected):
         config["vision_n_layers"] = vision_layers
     (tmp_path / "config.json").write_text(json.dumps(config))
     assert detect_model_type(tmp_path) == expected
+
+
+class TestNemotronRouting:
+    """Nemotron 3.5 checkpoints route by what mlx-vlm can build."""
+
+    @staticmethod
+    def _model_dir(tmp_path, config):
+        (tmp_path / "config.json").write_text(json.dumps(config))
+        return tmp_path
+
+    def test_puzzle_text_checkpoint_goes_to_vlm_engine(self, tmp_path):
+        config = {
+            "model_type": "nemotron_h_puzzle",
+            "architectures": ["NemotronHForCausalLM"],
+        }
+        assert detect_model_type(self._model_dir(tmp_path, config)) == "vlm"
+
+    def test_plain_nemotron_h_text_checkpoint_stays_llm(self, tmp_path):
+        config = {
+            "model_type": "nemotron_h",
+            "architectures": ["NemotronHForCausalLM"],
+        }
+        assert detect_model_type(self._model_dir(tmp_path, config)) == "llm"
+
+    def test_nemotron_h_with_block_configs_and_vision_goes_to_vlm(self, tmp_path):
+        config = {
+            "model_type": "nemotron_h",
+            "architectures": ["NemotronHForCausalLM"],
+            "block_configs": [{"block_type": "mamba"}],
+            "vision_config": {"hidden_size": 1280},
+        }
+        assert detect_model_type(self._model_dir(tmp_path, config)) == "vlm"
+
+    def test_nemotron_h_omni_goes_to_vlm(self, tmp_path):
+        config = {
+            "model_type": "nemotron_h_omni",
+            "llm_config": {"model_type": "nemotron_h"},
+            "vision_config": {"hidden_size": 1280},
+        }
+        assert detect_model_type(self._model_dir(tmp_path, config)) == "vlm"
+
+    def test_user_override_wins_over_puzzle_routing(self, tmp_path):
+        from omlx.engine_pool import EnginePool
+        from omlx.model_settings import ModelSettings, ModelSettingsManager
+
+        model = tmp_path / "puzzle"
+        model.mkdir()
+        self._model_dir(
+            model,
+            {
+                "model_type": "nemotron_h_puzzle",
+                "architectures": ["NemotronHForCausalLM"],
+            },
+        )
+        (model / "model.safetensors").write_bytes(b"0" * 1024)
+        pool = EnginePool()
+        pool.discover_models(str(tmp_path))
+        assert pool.get_entry("puzzle").model_type == "vlm"
+
+        settings = ModelSettingsManager(tmp_path / "settings")
+        settings.set_settings("puzzle", ModelSettings(model_type_override="llm"))
+        pool.apply_settings_overrides(settings)
+
+        entry = pool.get_entry("puzzle")
+        assert (entry.model_type, entry.engine_type) == ("llm", "batched")

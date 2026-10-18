@@ -37,9 +37,7 @@ except ImportError:
     HAS_MLX = False
 
 
-# ---------------------------------------------------------------------------
 # Mock helpers
-# ---------------------------------------------------------------------------
 
 
 class MockVLMTokenizer:
@@ -146,9 +144,7 @@ class FakeStreamingCore:
         self.aborted_request_id = request_id
 
 
-# ---------------------------------------------------------------------------
 # Test stream cleanup
-# ---------------------------------------------------------------------------
 
 
 class TestVLMStreamingCleanup:
@@ -489,9 +485,7 @@ class TestVLMDiffusionLane:
             "arguments": "{}",
         }
 
-        engine = _make_loaded_engine(
-            model_type="diffusion_gemma", tokenizer=tokenizer
-        )
+        engine = _make_loaded_engine(model_type="diffusion_gemma", tokenizer=tokenizer)
         engine._diffusion_family = "block"
 
         assert engine.supports_tool_calling is True
@@ -749,9 +743,7 @@ class TestVLMDiffusionLane:
         assert outputs[-1].finish_reason == "stop"
 
 
-# ---------------------------------------------------------------------------
 # TestInjectToolCalling
-# ---------------------------------------------------------------------------
 
 
 class TestInjectToolCalling:
@@ -862,10 +854,51 @@ class TestInjectToolCalling:
         assert tokenizer.has_tool_calling is True
         assert isinstance(tokenizer.tool_call_start, str)
 
+    @pytest.mark.parametrize(
+        "template_file",
+        [
+            "nemotron_bolt_chat_template.jinja",
+            "nemotron_super_vl_chat_template.jinja",
+        ],
+    )
+    def test_nemotron_template_tool_reply_becomes_openai_tool_call(self, template_file):
+        """Nemotron 3.5 templates install a parser that reads the XML reply."""
+        from omlx.api.tool_calling import parse_tool_calls
 
-# ---------------------------------------------------------------------------
+        template = (Path(__file__).parent / "fixtures" / template_file).read_text()
+        engine = _make_engine()
+        tokenizer = MockVLMTokenizer(
+            chat_template=template,
+            vocab={"<tool_call>": 100, "</tool_call>": 101},
+        )
+
+        engine._inject_tool_calling(tokenizer)
+
+        assert tokenizer.has_tool_calling is True
+        assert tokenizer.tool_parser.__module__ == "mlx_vlm.tools.parsers.qwen3_coder"
+        reply = (
+            "<tool_call>\n<function=read_file>\n<parameter=path>\nREADME.md\n"
+            "</parameter>\n</function>\n</tool_call>"
+        )
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string"}},
+                    },
+                },
+            }
+        ]
+        _, calls = parse_tool_calls(reply, tokenizer, tools)
+        assert calls is not None and len(calls) == 1
+        assert calls[0].function.name == "read_file"
+        assert json.loads(calls[0].function.arguments) == {"path": "README.md"}
+
+
 # TestApplyChatTemplate
-# ---------------------------------------------------------------------------
 
 
 class TestApplyChatTemplate:
@@ -1043,9 +1076,7 @@ class TestApplyChatTemplate:
         assert "enable_thinking" not in second_call_kwargs
 
 
-# ---------------------------------------------------------------------------
 # TestApplyOcrPrompt
-# ---------------------------------------------------------------------------
 
 
 class TestApplyOcrPrompt:
@@ -1187,9 +1218,7 @@ class TestApplyOcrPrompt:
         assert messages[0]["content"][1]["text"] == original_text
 
 
-# ---------------------------------------------------------------------------
 # TestProcessChatMessages
-# ---------------------------------------------------------------------------
 
 
 class TestProcessChatMessages:
@@ -1446,9 +1475,8 @@ class TestProcessChatMessages:
         call_kwargs = engine._prepare_vision_inputs.call_args[1]
         assert call_kwargs["tools"] is None
 
-# ---------------------------------------------------------------------------
+
 # TestPrepareVisionInputs
-# ---------------------------------------------------------------------------
 
 
 class TestPrepareVisionInputs:
@@ -2338,8 +2366,7 @@ class TestFormatMessagesForVLMTemplate:
             {
                 "role": "user",
                 "content": (
-                    "<|vision_start|><|image_pad|><|vision_end|>"
-                    "Describe this."
+                    "<|vision_start|><|image_pad|><|vision_end|>" "Describe this."
                 ),
             }
         ]
@@ -2510,9 +2537,7 @@ class TestFormatMessagesForVLMTemplate:
         assert "reasoning_content" not in formatted[0]
 
 
-# ---------------------------------------------------------------------------
 # TestCountChatTokens
-# ---------------------------------------------------------------------------
 
 
 class TestCountChatTokens:
@@ -2557,9 +2582,7 @@ class TestCountChatTokens:
         assert count == 1
 
 
-# ---------------------------------------------------------------------------
 # TestPartialModeVLM
-# ---------------------------------------------------------------------------
 
 
 class TestPartialModeVLM:
@@ -2710,9 +2733,7 @@ class TestPartialModeVLM:
 
     @pytest.mark.skipif(not HAS_MLX, reason="MLX not available")
     @patch("mlx_vlm.utils.prepare_inputs")
-    def test_no_chat_template_fallback_drops_continue_final_message(
-        self, mock_prepare
-    ):
+    def test_no_chat_template_fallback_drops_continue_final_message(self, mock_prepare):
         """Checkpoints with no chat template cannot continue a message.
 
         mlx-vlm's get_chat_template() has no continue_final_message
@@ -2763,8 +2784,7 @@ class TestPartialModeVLM:
             assert _is_missing_chat_template_error(ValueError(message))
         assert not _is_missing_chat_template_error(
             ValueError(
-                "continue_final_message and add_generation_prompt "
-                "are not compatible"
+                "continue_final_message and add_generation_prompt " "are not compatible"
             )
         )
 
@@ -2787,14 +2807,16 @@ class TestPartialModeVLM:
             "pixel_values": None,
         }
 
-        with patch(
-            "mlx_vlm.prompt_utils.get_chat_template",
-            return_value="<plain prompt>",
-        ) as mock_gct:
-            with pytest.raises(ValueError, match="not compatible"):
-                engine._process_chat_messages(
-                    self._plain_messages(), tools=None, kwargs={"is_partial": True}
-                )
+        with (
+            patch(
+                "mlx_vlm.prompt_utils.get_chat_template",
+                return_value="<plain prompt>",
+            ) as mock_gct,
+            pytest.raises(ValueError, match="not compatible"),
+        ):
+            engine._process_chat_messages(
+                self._plain_messages(), tools=None, kwargs={"is_partial": True}
+            )
         mock_gct.assert_not_called()
 
     def test_count_path_render_value_error_propagates(self):
@@ -2806,20 +2828,18 @@ class TestPartialModeVLM:
         engine = _make_loaded_engine(tokenizer=mock_tokenizer)
         engine._processor = MagicMock()
 
-        with patch(
-            "mlx_vlm.prompt_utils.get_chat_template",
-            return_value="<plain>",
-        ) as mock_gct:
-            with pytest.raises(ValueError, match="not compatible"):
-                engine._apply_chat_template(
-                    self._plain_messages(), is_partial=True
-                )
+        with (
+            patch(
+                "mlx_vlm.prompt_utils.get_chat_template",
+                return_value="<plain>",
+            ) as mock_gct,
+            pytest.raises(ValueError, match="not compatible"),
+        ):
+            engine._apply_chat_template(self._plain_messages(), is_partial=True)
         mock_gct.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # TestGetStats
-# ---------------------------------------------------------------------------
 
 
 class TestGetStats:
@@ -2837,9 +2857,7 @@ class TestGetStats:
         assert stats["loaded"] is True
 
 
-# ---------------------------------------------------------------------------
 # TestSplitVisionFeatures
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not HAS_MLX, reason="mlx not installed")
@@ -2908,9 +2926,7 @@ class TestSplitVisionFeatures:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
 # TestStopSafety
-# ---------------------------------------------------------------------------
 
 
 class TestStopSafety:
@@ -3062,9 +3078,7 @@ class TestStopSafety:
         assert engine._processor is None
 
 
-# ---------------------------------------------------------------------------
 # TestPreflightImageTokenCount
-# ---------------------------------------------------------------------------
 
 
 # Qwen3.x-VL / Qwen2.5-VL image-processor defaults used across these tests.
@@ -3093,20 +3107,24 @@ class TestSmartResizeTokens:
     @pytest.mark.parametrize(
         "w,h,expected",
         [
-            (512, 512, 256),     # exact multiple of patch*merge (32)
-            (336, 336, 100),     # 336 -> 336 grid 21x21 -> 441//4... rounds via factor
-            (510, 680, 336),     # non-multiple, rounded to nearest factor
-            (100, 100, 64),      # below min_pixels -> upscaled to min
+            (512, 512, 256),  # exact multiple of patch*merge (32)
+            (336, 336, 100),  # 336 -> 336 grid 21x21 -> 441//4... rounds via factor
+            (510, 680, 336),  # non-multiple, rounded to nearest factor
+            (100, 100, 64),  # below min_pixels -> upscaled to min
             (4000, 3000, 11750),  # above max_pixels -> downscaled to cap
-            (2791, 16, 106),     # thin image: branch on raw rounded dims
+            (2791, 16, 106),  # thin image: branch on raw rounded dims
         ],
     )
     def test_matches_known_grid(self, w, h, expected):
         from omlx.engine.vlm import _smart_resize_tokens
 
         got = _smart_resize_tokens(
-            h, w, _QWEN_IP.patch_size, _QWEN_IP.merge_size,
-            _QWEN_IP.min_pixels, _QWEN_IP.max_pixels,
+            h,
+            w,
+            _QWEN_IP.patch_size,
+            _QWEN_IP.merge_size,
+            _QWEN_IP.min_pixels,
+            _QWEN_IP.max_pixels,
         )
         assert got == expected
 
@@ -3127,8 +3145,7 @@ class TestReadImageDims:
     def test_http_url_returns_none(self):
         from omlx.engine.vlm import _read_image_dims
 
-        part = {"type": "image_url",
-                "image_url": {"url": "https://example.com/x.jpg"}}
+        part = {"type": "image_url", "image_url": {"url": "https://example.com/x.jpg"}}
         assert _read_image_dims(part) is None
 
     def test_local_path_returns_none_without_opening(self):
@@ -3142,8 +3159,10 @@ class TestReadImageDims:
     def test_garbage_returns_none(self):
         from omlx.engine.vlm import _read_image_dims
 
-        part = {"type": "image_url",
-                "image_url": {"url": "data:image/png;base64,not-base64!!"}}
+        part = {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,not-base64!!"},
+        }
         assert _read_image_dims(part) is None
 
 
@@ -3172,11 +3191,18 @@ class TestCountImageTokensReal:
     def test_falls_back_to_upper_bound_for_unreadable(self):
         from omlx.engine.vlm import _count_image_tokens_real
 
-        messages = [{"role": "user", "content": [
-            {"type": "image_url",
-             "image_url": {"url": "https://example.com/x.jpg"}},
-            {"type": "text", "text": "hi"},
-        ]}]
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/x.jpg"},
+                    },
+                    {"type": "text", "text": "hi"},
+                ],
+            }
+        ]
         total = _count_image_tokens_real(messages, _QWEN_PROC, upper_bound=16384)
         assert total == 16384
 
@@ -3185,8 +3211,7 @@ class TestCountImageTokensReal:
 
         # Processor missing patch/merge/min/max -> never under-count.
         messages = [{"role": "user", "content": [_image_part(512, 512)]}]
-        total = _count_image_tokens_real(messages, SimpleNamespace(),
-                                         upper_bound=16384)
+        total = _count_image_tokens_real(messages, SimpleNamespace(), upper_bound=16384)
         assert total == 16384
 
     def test_no_images_returns_zero(self):
@@ -3327,9 +3352,7 @@ class TestVLMEngineFrequencyPenalty:
         assert call_kwargs["sampling_params"].frequency_penalty == 0.42
 
 
-# ---------------------------------------------------------------------------
 # TestCaptureVLMPositionState
-# ---------------------------------------------------------------------------
 
 
 class TestCaptureVLMPositionState:
@@ -3438,9 +3461,12 @@ async def test_preflight_uses_processed_image_dimensions(
         # Repeat to exercise the decoded-image cache as well.
         for _ in range(2):
             await engine.preflight_chat(messages)
-            assert engine._preflight_or_raise_with_eviction.call_args.kwargs[
-                "num_prompt_tokens"
-            ] == expected_tokens + 1
+            assert (
+                engine._preflight_or_raise_with_eviction.call_args.kwargs[
+                    "num_prompt_tokens"
+                ]
+                == expected_tokens + 1
+            )
     finally:
         image_module.clear_image_decode_cache()
 
@@ -3465,9 +3491,7 @@ def test_deepseek_v4_packed_vision_features_round_trip():
         engine._split_vision_features(packed[:4], 2, metadata)
 
 
-# ---------------------------------------------------------------------------
 # Native video (Qwen3.5 / Qwen3.6 / Qwen3.8)
-# ---------------------------------------------------------------------------
 
 _VIDEO_URI = "data:video/mp4;base64,AAAA"
 
